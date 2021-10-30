@@ -1,2 +1,2 @@
 # docker-healthchecks
-Healthchecks.io Integration for Docker Healthchecks
+[Healthchecks.io](https://healthchecks.io/) Integration for Docker Healthchecks
