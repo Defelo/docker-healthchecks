@@ -6,8 +6,8 @@ from typing import cast
 
 import httpx
 
-from logger import get_logger
-from shell import stream_exec
+from .logger import get_logger
+from .shell import stream_exec
 
 logger = get_logger(__name__)
 
@@ -39,6 +39,8 @@ class Container:
 
 
 async def container_loop(container: Container) -> None:
+    await container.ping()
+
     async for status in stream_exec(
         "docker",
         "events",
