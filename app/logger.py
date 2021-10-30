@@ -1,6 +1,7 @@
 import logging
 import sys
-from os import getenv
+
+from app.environment import LOG_LEVEL
 
 logging_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s")
 
@@ -13,6 +14,6 @@ def get_logger(name: str) -> logging.Logger:
 
     logger: logging.Logger = logging.getLogger(name)
     logger.addHandler(logging_handler)
-    logger.setLevel(getenv("LOG_LEVEL", "INFO").upper())
+    logger.setLevel(LOG_LEVEL.upper())
 
     return logger

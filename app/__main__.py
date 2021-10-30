@@ -1,13 +1,28 @@
 import asyncio
-import re
+import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import cast
+from typing import cast, NoReturn
 
 import httpx
 
+from app.environment import PING_INTERVAL
 from .logger import get_logger
-from .shell import stream_exec
+from .shell import stream_exec, get_output
+
+CONTAINER_UPDATE_EVENTS = [
+    "destroy",
+    "die",
+    "exec_die",
+    "health_status",
+    "kill",
+    "pause",
+    "restart",
+    "start",
+    "stop",
+    "unpause",
+    "update",
+]
 
 logger = get_logger(__name__)
 
@@ -22,52 +37,54 @@ class Status(Enum):
 class Container:
     id: str
     url: str
-    status: Status
 
     def __repr__(self) -> str:
-        return f"Container(id={self.id[:12]}, url={self.url}, status={self.status.name.lower()})"
+        return f"Container(id={self.id[:12]}, url={self.url})"
 
-    async def update_status(self, status: Status) -> None:
-        self.status = status
-        logger.info(f"Container status update: {self}")
-        await self.ping()
+    async def get_status(self) -> Status:
+        result = json.loads(await get_output("docker", "inspect", "--format={{json .State}}", self.id))
 
-    async def ping(self) -> None:
-        logger.debug(f"Container ping: {self}")
+        if not result.get("Running") or result.get("Paused") or result.get("Restarting") or result.get("Dead"):
+            return Status.UNHEALTHY
+        if not (health := result.get("Health")):
+            return Status.HEALTHY
+
+        return Status[health.get("Status", "unhealthy").upper()]
+
+    async def ping(self, status: Status) -> None:
+        logger.debug(f"Container ping: {self} {status.name}")
         async with httpx.AsyncClient() as client:
-            await client.get(self.url + self.status.value)
+            await client.get(self.url + status.value)
 
+    async def ping_loop(self) -> NoReturn:
+        while True:
+            await self.ping(await self.get_status())
+            await asyncio.sleep(PING_INTERVAL)
 
-async def container_loop(container: Container) -> None:
-    await container.ping()
+    async def loop(self) -> None:
+        ping_loop: asyncio.Task[None] = asyncio.create_task(self.ping_loop())
 
-    async for status in stream_exec(
-        "docker",
-        "events",
-        "--filter=type=container",
-        f"--filter=container={container.id}",
-        "--format={{.Status}}",
-    ):
-        status = cast(str, status)
+        async for status in stream_exec(
+            "docker",
+            "events",
+            "--filter=type=container",
+            f"--filter=container={self.id}",
+            "--format={{.Status}}",
+        ):
+            status = cast(str, status)
+            logger.debug(f"Container event: {self} {status}")
 
-        logger.debug(f"Container event: {container} {status}")
+            if status.split(":")[0] not in CONTAINER_UPDATE_EVENTS:
+                continue
 
-        if status == "destroy":
-            await container.update_status(Status.UNHEALTHY)
-            break
-        if status == "start":
-            await container.update_status(Status.STARTING)
-            continue
-        if status in ["kill", "die", "stop"]:
-            await container.update_status(Status.UNHEALTHY)
-            continue
+            ping_loop.cancel()
+            if status == "destroy":
+                await self.ping(Status.UNHEALTHY)
+                break
 
-        if match := re.match(r"^health_status: (healthy|unhealthy)$", status):
-            await container.update_status(Status.HEALTHY if match.group(1) == "healthy" else Status.UNHEALTHY)
-        elif status == "exec_die":
-            await container.ping()
+            ping_loop = asyncio.create_task(self.ping_loop())
 
-    logger.info(f"Container destroyed: {container}")
+        logger.info(f"Container destroyed: {self}")
 
 
 async def main() -> None:
@@ -79,19 +96,12 @@ async def main() -> None:
         "-aq",
         "--no-trunc",
         "--filter=label=healthchecks.url",
-        '--format={{.ID}} {{.Label "healthchecks.url"}} {{.Status}}',
+        '--format={{.ID}} {{.Label "healthchecks.url"}}',
     ):
-        container_id, url, *_, status = cast(str, line).split()
-        if "unhealthy" in status:
-            health = Status.UNHEALTHY
-        elif "healthy" in status:
-            health = Status.HEALTHY
-        else:
-            health = Status.STARTING
-
-        container = Container(container_id, url, health)
-        logger.info(f"Found existing container {container}")
-        asyncio.create_task(container_loop(container))
+        container_id, url = cast(str, line).split()
+        container = Container(container_id, url)
+        logger.info(f"Found existing container: {container}")
+        asyncio.create_task(container.loop())
 
     async for line in stream_exec(
         "docker",
@@ -102,9 +112,9 @@ async def main() -> None:
         '--format={{.ID}} {{index .Actor.Attributes "healthchecks.url"}}',
     ):
         container_id, url = cast(str, line).split()
-        container = Container(container_id, url, Status.STARTING)
+        container = Container(container_id, url)
         logger.info(f"Container created: {container}")
-        asyncio.create_task(container_loop(container))
+        asyncio.create_task(container.loop())
 
 
 if __name__ == "__main__":
