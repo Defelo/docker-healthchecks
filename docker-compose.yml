@@ -1,0 +1,11 @@
+version: '3.9'
+
+services:
+  docker-healthchecks:
+    image: ghcr.io/defelo/docker-healthchecks
+    restart: always
+    tty: true
+    environment:
+      LOG_LEVEL: INFO
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
