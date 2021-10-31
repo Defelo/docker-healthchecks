@@ -2,7 +2,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import cast, NoReturn
+from typing import cast, NoReturn, Optional
 
 import httpx
 
@@ -37,6 +37,7 @@ class Status(Enum):
 class Container:
     id: str
     url: str
+    _last_status: Optional[Status] = None
 
     def __repr__(self) -> str:
         return f"Container(id={self.id[:12]}, url={self.url})"
@@ -52,9 +53,17 @@ class Container:
         return Status[health.get("Status", "unhealthy").upper()]
 
     async def ping(self, status: Status) -> None:
+        if status != self._last_status:
+            last = self._last_status and self._last_status.name
+            logger.info(f"Container status changed: {self} {last} -> {status.name}")
+            self._last_status = status
+
         logger.debug(f"Container ping: {self} {status.name}")
-        async with httpx.AsyncClient() as client:
-            await client.get(self.url + status.value)
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.get(self.url + status.value)
+        except httpx.HTTPError:
+            logger.warning(f"Could not send ping: {self} {status.name}")
 
     async def ping_loop(self) -> NoReturn:
         while True:
