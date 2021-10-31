@@ -62,7 +62,9 @@ class Container:
         for i in range(PING_RETRIES):
             try:
                 async with httpx.AsyncClient() as client:
-                    await client.get(self.url + status.value)
+                    response: httpx.Response = await client.get(self.url + status.value)
+                    if response.status_code != 200:
+                        logger.warning(f"Ping failed with status code {response.status_code}: {self} {status.name}")
             except httpx.HTTPError as e:
                 if i < PING_RETRIES - 1:
                     logger.warning(f"Could not send ping, trying again ({i+1}/{PING_RETRIES}): {self} {status.name}")
