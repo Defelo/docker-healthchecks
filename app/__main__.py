@@ -2,7 +2,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import cast, NoReturn, Optional
+from typing import cast, Optional
 
 import httpx
 
@@ -76,9 +76,14 @@ class Container:
             else:
                 break
 
-    async def ping_loop(self) -> NoReturn:
+    async def ping_loop(self) -> None:
         while True:
-            await self.ping(await self.get_status())
+            try:
+                await self.ping(await self.get_status())
+            except OSError:
+                logger.warning(f"Could not find container: {self}")
+                break
+
             await asyncio.sleep(PING_INTERVAL)
 
     async def loop(self) -> None:
