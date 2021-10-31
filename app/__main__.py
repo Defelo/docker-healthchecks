@@ -6,7 +6,7 @@ from typing import cast, NoReturn, Optional
 
 import httpx
 
-from app.environment import PING_INTERVAL
+from app.environment import PING_INTERVAL, PING_RETRIES
 from .logger import get_logger
 from .shell import stream_exec, get_output
 
@@ -59,11 +59,20 @@ class Container:
             self._last_status = status
 
         logger.debug(f"Container ping: {self} {status.name}")
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.get(self.url + status.value)
-        except httpx.HTTPError:
-            logger.warning(f"Could not send ping: {self} {status.name}")
+        for i in range(PING_RETRIES):
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.get(self.url + status.value)
+            except httpx.HTTPError as e:
+                if i < PING_RETRIES - 1:
+                    logger.warning(f"Could not send ping, trying again ({i+1}/{PING_RETRIES}): {self} {status.name}")
+                    await asyncio.sleep(2)
+                else:
+                    logger.error(f"Could not send ping, giving up ({i+1}/{PING_RETRIES}): {self} {status.name}")
+                    logger.exception(e)
+                    break
+            else:
+                break
 
     async def ping_loop(self) -> NoReturn:
         while True:
