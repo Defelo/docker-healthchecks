@@ -13,11 +13,8 @@ from .shell import stream_exec, get_output
 CONTAINER_UPDATE_EVENTS = [
     "destroy",
     "die",
-    "exec_die",
     "health_status",
-    "kill",
     "pause",
-    "restart",
     "start",
     "stop",
     "unpause",
@@ -93,14 +90,12 @@ class Container:
             "docker",
             "events",
             "--filter=type=container",
+            *[f"--filter=event={event}" for event in CONTAINER_UPDATE_EVENTS],
             f"--filter=container={self.id}",
             "--format={{.Status}}",
         ):
             status = cast(str, status)
             logger.debug(f"Container event: {self} {status}")
-
-            if status.split(":")[0] not in CONTAINER_UPDATE_EVENTS:
-                continue
 
             ping_loop.cancel()
             if status == "destroy":
