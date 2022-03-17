@@ -1,4 +1,4 @@
-FROM python:3.9.7-alpine AS builder
+FROM python:3.10.3-alpine AS builder
 
 RUN apk add --no-cache \
     build-base~=0.5 \
@@ -16,7 +16,7 @@ ARG PIPENV_VENV_IN_PROJECT=true
 RUN pipenv install --deploy --ignore-pipfile
 
 
-FROM python:3.9.7-alpine
+FROM python:3.10.3-alpine
 
 LABEL org.opencontainers.image.source="https://github.com/Defelo/docker-healthchecks"
 
