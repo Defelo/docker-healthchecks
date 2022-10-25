@@ -41,10 +41,10 @@ impl Healthchecks {
 
         let mut retries = self.ping_retries;
         while let Err(err) = try_ping(&url).await {
-            retries -= 1;
             if retries == 0 {
                 return Err(err.context(format!("healthchecks ping to {url} failed")));
             }
+            retries -= 1;
             warn!("healthchecks ping to {url} failed, retrying...");
             sleep(Duration::from_secs(2)).await;
         }
