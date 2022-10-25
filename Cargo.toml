@@ -14,4 +14,4 @@ reqwest = { version = "0.11.12", default-features = false, features = ["rustls-t
 serde = { version = "1.0.147", default-features = false, features = ["derive"] }
 tokio = { version = "1.21.2", default-features = false, features = ["macros", "rt-multi-thread"] }
 tracing = { version = "0.1.37", default-features = false }
-tracing-subscriber = { version = "0.3.16", default-features = false, features = ["fmt", "ansi"] }
+tracing-subscriber = { version = "0.3.16", default-features = false, features = ["fmt", "ansi", "env-filter"] }
