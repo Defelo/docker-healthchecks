@@ -1,10 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use docker_api::{models::ContainerInspect200Response, opts::ContainerListOpts, Docker};
-use std::{
-    collections::{HashMap, HashSet},
-    time::{SystemTime, UNIX_EPOCH},
-};
-use tracing::{debug, error, info};
+use std::collections::{HashMap, HashSet};
+use tracing::info;
 
 use crate::healthchecks::Healthchecks;
 
@@ -25,52 +22,17 @@ pub struct Containers {
     docker: Docker,
     containers: HashMap<String, Container>,
     ignored_containers: HashSet<String>,
-    last_ping: SystemTime,
-    ping_interval: u64,
-    last_fetch: SystemTime,
-    fetch_interval: u64,
     healthchecks: Healthchecks,
 }
 
 impl Containers {
-    pub fn new(
-        docker: Docker,
-        ping_interval: u64,
-        fetch_interval: u64,
-        healthchecks: Healthchecks,
-    ) -> Self {
+    pub fn new(docker: Docker, healthchecks: Healthchecks) -> Self {
         Self {
             docker,
             containers: HashMap::new(),
             ignored_containers: HashSet::new(),
-            last_ping: UNIX_EPOCH,
-            ping_interval,
-            last_fetch: UNIX_EPOCH,
-            fetch_interval,
             healthchecks,
         }
-    }
-
-    pub async fn tick(&mut self) -> Result<()> {
-        if SystemTime::now().duration_since(self.last_ping)?.as_secs() > self.ping_interval {
-            info!("pinging monitoring");
-            if let Err(err) = self.ping().await.context("failed to ping monitoring") {
-                error!("{err:#}");
-            }
-            self.last_ping = SystemTime::now();
-        }
-        if SystemTime::now().duration_since(self.last_fetch)?.as_secs() > self.fetch_interval {
-            info!("fetching containers");
-            if let Err(err) = self.fetch().await.context("failed to fetch containers") {
-                error!("{err:#}");
-            }
-            self.last_fetch = SystemTime::now();
-        }
-        debug!("{} containers running", self.containers.len());
-        for container in &self.containers {
-            debug!("  - {container:?}");
-        }
-        Ok(())
     }
 
     fn get_status_map(&self) -> HashMap<String, Health> {
@@ -88,14 +50,16 @@ impl Containers {
         status
     }
 
-    async fn ping(&mut self) -> Result<()> {
+    pub async fn ping_healthchecks(&mut self) -> Result<()> {
+        info!("pinging healthchecks");
         for (label, health) in self.get_status_map() {
             self.healthchecks.ping(&label, &health).await?;
         }
         Ok(())
     }
 
-    async fn fetch(&mut self) -> Result<()> {
+    pub async fn fetch_containers(&mut self) -> Result<()> {
+        info!("fetching containers");
         let mut containers = HashMap::new();
         let mut ignored_containers = HashSet::new();
         for summary in self

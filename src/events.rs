@@ -4,7 +4,7 @@ use std::sync::Arc;
 use docker_api::{models::EventMessage, opts::EventsOpts, Docker};
 use futures_util::StreamExt;
 use tokio::sync::RwLock;
-use tracing::{debug, error};
+use tracing::{error, info};
 
 use crate::containers::{Containers, Health};
 
@@ -20,14 +20,14 @@ impl Events {
 
     async fn handle_container_start(&self, event: EventMessage) -> Result<()> {
         let id = get_container_id(&event)?.clone();
-        debug!("container started: {:?}", id);
+        info!("container started: {:?}", id);
         self.containers.write().await.container_started(id).await?;
         Ok(())
     }
 
     async fn handle_container_die(&self, event: EventMessage) -> Result<()> {
         let id = get_container_id(&event)?;
-        debug!("container died: {:?}", id);
+        info!("container died: {:?}", id);
         self.containers.write().await.container_died(id).await?;
         Ok(())
     }
@@ -46,7 +46,7 @@ impl Events {
                 bail!("container {} has invalid health status: {}", id, status);
             }
         };
-        debug!("health status update: {} {:?}", id, status);
+        info!("health status update: {} {:?}", id, status);
         self.containers
             .write()
             .await
