@@ -227,5 +227,5 @@ fn get_label(data: &ContainerInspect200Response) -> Result<Option<String>> {
         .labels
         .as_ref()
         .ok_or_else(|| anyhow!("container inspect config labels object is empty"))?;
-    Ok(labels.get("healthchecks.id").cloned())
+    Ok(labels.get("healthchecks.url").cloned())
 }

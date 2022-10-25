@@ -1,47 +1,43 @@
 use std::{collections::HashSet, time::Duration};
 
-use anyhow::{Context, Result};
-use reqwest::Client;
+use anyhow::Result;
+use reqwest::{Client, IntoUrl};
 use tokio::time::sleep;
 use tracing::{debug, warn};
-use url::Url;
 
 use crate::containers::Health;
 
 pub struct Healthchecks {
-    url: Url,
     ping_retries: u8,
     starting: HashSet<String>,
 }
 
 impl Healthchecks {
-    pub fn new(url: Url, ping_retries: u8) -> Self {
+    pub fn new(ping_retries: u8) -> Self {
         Self {
-            url,
             ping_retries,
             starting: HashSet::new(),
         }
     }
 
-    pub async fn ping(&mut self, id: &str, health: &Health) -> Result<()> {
-        if self.starting.contains(id) {
+    pub async fn ping(&mut self, url: &str, health: &Health) -> Result<()> {
+        if self.starting.contains(url) {
             if health == &Health::Starting {
-                debug!("not sending another starting ping to healthchecks for {id}");
+                debug!("not sending another starting ping to healthchecks for {url}");
                 return Ok(());
             }
-            self.starting.remove(id);
+            self.starting.remove(url);
         } else if health == &Health::Starting {
-            self.starting.insert(id.to_owned());
+            self.starting.insert(url.to_owned());
         }
 
-        debug!("sending {health:?} ping to healthchecks for {id}");
+        debug!("sending {health:?} ping to healthchecks for {url}");
 
         let url = match health {
-            Health::Healthy => self.url.join(id),
-            Health::Unhealthy => self.url.join(&format!("{id}/fail")),
-            Health::Starting => self.url.join(&format!("{id}/start")),
-        }
-        .context("could not build healthchecks ping url for {health:?} {id}")?;
+            Health::Healthy => url.to_owned(),
+            Health::Unhealthy => format!("{url}/fail"),
+            Health::Starting => format!("{url}/start"),
+        };
 
         let mut retries = self.ping_retries;
         while let Err(err) = try_ping(&url).await {
@@ -57,7 +53,7 @@ impl Healthchecks {
     }
 }
 
-async fn try_ping(url: &Url) -> Result<()> {
+async fn try_ping(url: &impl IntoUrl) -> Result<()> {
     Client::new()
         .post(url.as_str())
         .send()

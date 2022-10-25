@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
             .context("could not ping docker daemon")?
     );
 
-    let healthchecks = Healthchecks::new(config.healthchecks_url, config.ping_retries);
+    let healthchecks = Healthchecks::new(config.ping_retries);
     let containers = Arc::new(RwLock::new(Containers::new(
         docker.clone(),
         config.ping_interval,
