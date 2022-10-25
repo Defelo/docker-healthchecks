@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.66", default-features = false, features = ["std"] }
-async-trait = { version = "0.1.58", default-features = false }
 config = { version = "0.13.2", default-features = false }
 docker-api = { version = "0.12", default-features = false }
 futures-util = { version = "0.3.25", default-features = false }

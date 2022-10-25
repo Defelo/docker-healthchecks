@@ -1,13 +1,11 @@
 use std::{collections::HashSet, time::Duration};
 
 use anyhow::{Context, Result};
-use async_trait::async_trait;
 use reqwest::Client;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 use url::Url;
 
-use super::Monitoring;
 use crate::containers::Health;
 
 pub struct Healthchecks {
@@ -24,11 +22,8 @@ impl Healthchecks {
             starting: HashSet::new(),
         }
     }
-}
 
-#[async_trait]
-impl Monitoring for Healthchecks {
-    async fn ping(&mut self, id: &str, health: &Health) -> Result<()> {
+    pub async fn ping(&mut self, id: &str, health: &Health) -> Result<()> {
         if self.starting.contains(id) {
             if health == &Health::Starting {
                 debug!("not sending another starting ping to healthchecks for {id}");

@@ -23,12 +23,12 @@ use docker_api::Docker;
 use tokio::{spawn, sync::RwLock, time::sleep};
 use tracing::{debug, error};
 
-use self::{containers::Containers, events::Events, monitoring::Healthchecks};
+use self::{containers::Containers, events::Events, healthchecks::Healthchecks};
 
 mod config;
 mod containers;
 mod events;
-mod monitoring;
+mod healthchecks;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -45,15 +45,12 @@ async fn main() -> Result<()> {
             .context("could not ping docker daemon")?
     );
 
-    let monitoring = Box::new(Healthchecks::new(
-        config.healthchecks_url,
-        config.ping_retries,
-    ));
+    let healthchecks = Healthchecks::new(config.healthchecks_url, config.ping_retries);
     let containers = Arc::new(RwLock::new(Containers::new(
         docker.clone(),
         config.ping_interval,
         config.fetch_interval,
-        monitoring,
+        healthchecks,
     )));
     let mut events = Events::new(docker, containers.clone());
 

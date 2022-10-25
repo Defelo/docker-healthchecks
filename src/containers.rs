@@ -6,7 +6,7 @@ use std::{
 };
 use tracing::{debug, error, info};
 
-use crate::monitoring::Monitoring;
+use crate::healthchecks::Healthchecks;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Health {
@@ -29,7 +29,7 @@ pub struct Containers {
     ping_interval: u64,
     last_fetch: SystemTime,
     fetch_interval: u64,
-    monitoring: Box<dyn Monitoring>,
+    healthchecks: Healthchecks,
 }
 
 impl Containers {
@@ -37,7 +37,7 @@ impl Containers {
         docker: Docker,
         ping_interval: u64,
         fetch_interval: u64,
-        monitoring: Box<dyn Monitoring>,
+        healthchecks: Healthchecks,
     ) -> Self {
         Self {
             docker,
@@ -47,7 +47,7 @@ impl Containers {
             ping_interval,
             last_fetch: UNIX_EPOCH,
             fetch_interval,
-            monitoring,
+            healthchecks,
         }
     }
 
@@ -90,7 +90,7 @@ impl Containers {
 
     async fn ping(&mut self) -> Result<()> {
         for (label, health) in self.get_status_map() {
-            self.monitoring.ping(&label, &health).await?;
+            self.healthchecks.ping(&label, &health).await?;
         }
         Ok(())
     }
@@ -149,7 +149,7 @@ impl Containers {
             .get_status_map()
             .remove(label)
             .unwrap_or(Health::Unhealthy);
-        self.monitoring.ping(label, &health).await
+        self.healthchecks.ping(label, &health).await
     }
 
     pub async fn container_started(&mut self, id: String) -> Result<()> {
@@ -172,7 +172,7 @@ impl Containers {
         }
         if let Some(container) = self.containers.remove(id) {
             if !self.get_status_map().contains_key(&container.label) {
-                self.monitoring
+                self.healthchecks
                     .ping(&container.label, &Health::Unhealthy)
                     .await?;
             }
