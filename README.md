@@ -2,7 +2,7 @@
 [![Unsafe Rust forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg?style=flat)](https://github.com/rust-secure-code/safety-dance/)
 [![Version](https://img.shields.io/github/v/tag/Defelo/docker-healthchecks?label=version)](https://ghcr.io/Defelo/docker-healthchecks)
 [![rustc 1.60.0+](https://img.shields.io/badge/rustc-1.62.0+-ab6000.svg?style=flat)](https://blog.rust-lang.org/2022/04/07/Rust-1.60.0.html)
-[![](https://img.shields.io/librariesio/github/Defelo/docker-healthchecks.svg?style=flat)](https://deps.rs/repo/github/Defelo/docker-healthchecks)
+[![dependency status](https://deps.rs/repo/github/Defelo/docker-healthchecks/status.svg)](https://deps.rs/repo/github/Defelo/docker-healthchecks)
 
 # docker-healthchecks
 [Healthchecks.io](https://healthchecks.io/) Integration for [Docker Healthchecks](https://docs.docker.com/engine/reference/builder/#healthcheck)
