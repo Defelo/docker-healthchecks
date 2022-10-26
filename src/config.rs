@@ -16,8 +16,17 @@ pub struct Config {
     /// Number of retries for failed healthcheck pings
     pub ping_retries: u8,
 
+    /// Number of seconds after which the ping timeout expires
+    pub ping_timeout: u64,
+
     /// Number of seconds between reloading the full container list from the docker daemon
     pub fetch_interval: u64,
+
+    /// Number of seconds after which the container fetch timeout expires
+    pub fetch_timeout: u64,
+
+    /// Number of seconds after which the timeout for handling a docker event expires
+    pub event_timeout: u64,
 }
 
 impl Default for Config {
@@ -26,7 +35,10 @@ impl Default for Config {
             docker_path: "/var/run/docker.sock".to_owned(),
             ping_interval: 60,
             ping_retries: 5,
+            ping_timeout: 50,
             fetch_interval: 600,
+            fetch_timeout: 300,
+            event_timeout: 60,
         }
     }
 }

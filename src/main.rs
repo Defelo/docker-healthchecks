@@ -26,7 +26,7 @@ use docker_api::Docker;
 use tokio::{
     spawn,
     sync::RwLock,
-    time::{interval, sleep},
+    time::{interval, sleep, timeout},
 };
 use tracing::{debug, error};
 
@@ -72,11 +72,13 @@ async fn main() -> Result<()> {
 
     // create event handler
     let containers = Arc::new(RwLock::new(containers));
-    let mut events = EventHandler::new(docker, containers.clone());
+    let events = EventHandler::new(containers.clone());
 
     // handle docker events in a new task
     spawn(async move {
-        events.handle_events().await;
+        events
+            .handle_events(docker, Duration::from_secs(config.event_timeout))
+            .await;
     });
 
     // periodically refresh docker container list in case we miss some events
@@ -85,12 +87,16 @@ async fn main() -> Result<()> {
         let duration = Duration::from_secs(config.fetch_interval);
         loop {
             sleep(duration).await;
-            if let Err(err) = cont
-                .write()
-                .await
-                .fetch_containers()
-                .await
-                .context("failed to fetch containers")
+            if let Err(err) = timeout(Duration::from_secs(config.fetch_timeout), async {
+                cont.write()
+                    .await
+                    .fetch_containers()
+                    .await
+                    .context("failed to fetch containers")
+            })
+            .await
+            .context("failed to fetch containers in time")
+            .and_then(|res| res)
             {
                 error!("{err:#}");
             }
@@ -102,6 +108,13 @@ async fn main() -> Result<()> {
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         interval.tick().await;
-        containers.write().await.ping_healthchecks().await;
+        if let Err(err) = timeout(Duration::from_secs(config.ping_timeout), async {
+            containers.write().await.ping_healthchecks().await;
+        })
+        .await
+        .context("failed to ping healthchecks in time")
+        {
+            error!("{err:#}");
+        }
     }
 }

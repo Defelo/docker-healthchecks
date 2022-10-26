@@ -28,5 +28,8 @@
 | `DOCKER_PATH`    | Path of the docker daemon socket                                                                               | `/var/run/docker.sock` |
 | `PING_INTERVAL`  | Number of seconds between healthcheck pings                                                                    | `60`                   |
 | `PING_RETRIES`   | Number of retries for failed healthcheck pings                                                                 | `5`                    |
+| `PING_TIMEOUT`   | Number of seconds after which the ping timeout expires                                                         | `50`                   |
 | `FETCH_INTERVAL` | Number of seconds between reloading the full container list from the docker daemon                             | `600`                  |
+| `FETCH_TIMEOUT`  | Number of seconds after which the container fetch timeout expires                                              | `300`                  |
+| `EVENT_TIMEOUT`  | Number of seconds after which the timeout for handling a docker event expires                                  | `60`                   |
 

@@ -1,50 +1,64 @@
 //! Handle docker daemon events
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, Context, Result};
 use docker_api::{models::EventMessage, opts::EventsOpts, Docker};
 use futures_util::StreamExt;
-use tokio::sync::RwLock;
+use tokio::{spawn, sync::RwLock, time::timeout};
 use tracing::{error, info};
 
 use crate::container_manager::{ContainerManager, Health};
 
 /// Handler for docker daemon events
 pub struct EventHandler {
-    /// Docker daemon interface
-    docker: Docker,
-
     /// Reference to the container manager to which container updates are to be reported
     container_manager: Arc<RwLock<ContainerManager>>,
 }
 
 impl EventHandler {
     /// Create a new docker event handler
-    pub fn new(docker: Docker, container_manager: Arc<RwLock<ContainerManager>>) -> Self {
-        Self {
-            docker,
-            container_manager,
-        }
+    pub fn new(container_manager: Arc<RwLock<ContainerManager>>) -> Self {
+        Self { container_manager }
     }
 
     /// Subscribe to the docker event stream and handle all events
-    pub async fn handle_events(&mut self) {
-        let mut stream = self.docker.events(&EventsOpts::default());
-        while let Some(event) = stream.next().await {
-            if let Err(err) = async {
-                self.handle_event(event.context("could not get event data")?)
-                    .await
-                    .context("could not handle event")
-            }
-            .await
-            {
-                error!("{err:#}");
+    pub async fn handle_events(self, docker: Docker, timeout_duration: Duration) -> ! {
+        let handler = Arc::new(self);
+        loop {
+            info!("subscribing to docker event stream");
+            let mut stream = docker.events(&EventsOpts::default());
+            while let Some(event) = stream.next().await {
+                spawn(Self::handle_raw_event(
+                    handler.clone(),
+                    event,
+                    timeout_duration,
+                ));
             }
         }
     }
 
-    /// Handle a event from the docker daemon
+    /// Handle a raw event from the docker event stream
+    async fn handle_raw_event(
+        handler: Arc<Self>,
+        event: docker_api::Result<EventMessage>,
+        timeout_duration: Duration,
+    ) {
+        if let Err(err) = timeout(timeout_duration, async {
+            handler
+                .handle_event(event.context("could not get event data")?)
+                .await
+                .context("could not handle event")
+        })
+        .await
+        .context("failed to handle event in time")
+        .and_then(|res| res)
+        {
+            error!("{err:#}");
+        }
+    }
+
+    /// Handle an event from the docker daemon
     async fn handle_event(&self, event: EventMessage) -> Result<()> {
         match (event.type_.as_deref(), event.action.as_deref()) {
             // container start
