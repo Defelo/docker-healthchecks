@@ -1,11 +1,18 @@
+[![CI](https://github.com/Defelo/docker-healthchecks/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Defelo/docker-healthchecks/actions/workflows/ci.yml)
+[![Unsafe Rust forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg?style=flat)](https://github.com/rust-secure-code/safety-dance/)
+[![Version](https://img.shields.io/github/v/tag/Defelo/docker-healthchecks?label=version)](https://ghcr.io/Defelo/docker-healthchecks)
+[![rustc 1.60.0+](https://img.shields.io/badge/rustc-1.62.0+-ab6000.svg?style=flat)](https://blog.rust-lang.org/2022/04/07/Rust-1.60.0.html)
+[![](https://img.shields.io/librariesio/github/Defelo/docker-healthchecks.svg?style=flat)](https://deps.rs/repo/github/Defelo/docker-healthchecks)
+
 # docker-healthchecks
 [Healthchecks.io](https://healthchecks.io/) Integration for [Docker Healthchecks](https://docs.docker.com/engine/reference/builder/#healthcheck)
 
 ## Setup Instructions
 
-1. Run the [docker-healthchecks container](https://github.com/defelo/docker-healthchecks/pkgs/container/docker-healthchecks):
+1. Start the [docker-healthchecks container](https://github.com/defelo/docker-healthchecks/pkgs/container/docker-healthchecks):
     ```
-    # docker run -d \
+    docker run -d \
+        -e RUST_LOG=warn,docker_healthchecks=info \
         -e DOCKER_PATH=/docker.sock \
         -v /var/run/docker.sock/docker.sock:ro \
         ghcr.io/defelo/docker-healthchecks
