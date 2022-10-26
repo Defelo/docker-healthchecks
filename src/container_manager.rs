@@ -4,7 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, bail, Context, Result};
 use docker_api::{models::ContainerInspect200Response, opts::ContainerListOpts, Docker};
-use tracing::info;
+use futures_util::future::join_all;
+use tracing::{error, info};
 
 use crate::healthchecks::Healthchecks;
 
@@ -59,12 +60,19 @@ impl ContainerManager {
     }
 
     /// Ping the healthcheck urls of all monitored containers
-    pub async fn ping_healthchecks(&mut self) -> Result<()> {
+    pub async fn ping_healthchecks(&mut self) {
         info!("pinging healthchecks");
-        for (label, health) in self.get_status_map() {
-            self.healthchecks.ping(&label, &health).await?;
-        }
-        Ok(())
+        join_all(self.get_status_map().iter().map(|(label, health)| async {
+            if let Err(err) = self
+                .healthchecks
+                .ping(label, health)
+                .await
+                .context("failed to ping healthchecks")
+            {
+                error!("{err:#}");
+            }
+        }))
+        .await;
     }
 
     /// Reload all docker containers from the daemon

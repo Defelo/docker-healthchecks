@@ -102,14 +102,6 @@ async fn main() -> Result<()> {
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         interval.tick().await;
-        if let Err(err) = containers
-            .write()
-            .await
-            .ping_healthchecks()
-            .await
-            .context("failed to ping healthchecks")
-        {
-            error!("{err:#}");
-        }
+        containers.write().await.ping_healthchecks().await;
     }
 }

@@ -4,7 +4,7 @@ use std::{collections::HashSet, time::Duration};
 
 use anyhow::Result;
 use reqwest::{Client, IntoUrl};
-use tokio::time::sleep;
+use tokio::{sync::RwLock, time::sleep};
 use tracing::{debug, warn};
 
 use crate::container_manager::Health;
@@ -15,7 +15,7 @@ pub struct Healthchecks {
     ping_retries: u8,
 
     /// Set of ping urls that last received a starting ping
-    starting: HashSet<String>,
+    starting: RwLock<HashSet<String>>,
 }
 
 impl Healthchecks {
@@ -23,22 +23,24 @@ impl Healthchecks {
     pub fn new(ping_retries: u8) -> Self {
         Self {
             ping_retries,
-            starting: HashSet::new(),
+            starting: RwLock::new(HashSet::new()),
         }
     }
 
     /// Ping a given healthchecks url
-    pub async fn ping(&mut self, url: &str, health: &Health) -> Result<()> {
+    pub async fn ping(&self, url: &str, health: &Health) -> Result<()> {
         // avoid sending multiple consecutive starting pings to the same url
-        if self.starting.contains(url) {
+        let mut starting = self.starting.write().await;
+        if starting.contains(url) {
             if health == &Health::Starting {
                 debug!("not sending another starting ping to healthchecks for {url}");
                 return Ok(());
             }
-            self.starting.remove(url);
+            starting.remove(url);
         } else if health == &Health::Starting {
-            self.starting.insert(url.to_owned());
+            starting.insert(url.to_owned());
         }
+        drop(starting);
 
         debug!("sending {health:?} ping to healthchecks for {url}");
 
