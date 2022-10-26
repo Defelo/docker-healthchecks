@@ -1,3 +1,5 @@
+//! Healthchecks.io Integration for Docker Healthchecks
+
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::dbg_macro, clippy::use_debug)]
@@ -10,11 +12,12 @@
     clippy::unreachable
 )]
 #![warn(
+    clippy::missing_docs_in_private_items,
+    clippy::self_named_module_files,
     clippy::shadow_unrelated,
     clippy::str_to_string,
     clippy::wildcard_enum_match_arm
 )]
-#![allow(clippy::module_name_repetitions)]
 
 use std::{sync::Arc, time::Duration};
 
@@ -27,17 +30,21 @@ use tokio::{
 };
 use tracing::{debug, error};
 
-use self::{containers::Containers, events::Events, healthchecks::Healthchecks};
+use self::{
+    container_manager::ContainerManager, event_handler::EventHandler, healthchecks::Healthchecks,
+};
 
 mod config;
-mod containers;
-mod events;
+mod container_manager;
+mod event_handler;
 mod healthchecks;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // initialize tracing subscriber
     tracing_subscriber::fmt::init();
 
+    // load config from environment variables
     let config = config::load().context("could not load environment variables")?;
     ensure!(
         config.ping_interval >= 1,
@@ -48,6 +55,7 @@ async fn main() -> Result<()> {
         "fetch_interval must be at least one second"
     );
 
+    // connect to docker daemon
     let docker = Docker::unix(&config.docker_path);
     debug!(
         "connected to docker: {:?}",
@@ -57,16 +65,21 @@ async fn main() -> Result<()> {
             .context("could not ping docker daemon")?
     );
 
-    let mut containers = Containers::new(docker.clone(), Healthchecks::new(config.ping_retries));
+    // create container manager and load container list from docker daemon
+    let mut containers =
+        ContainerManager::new(docker.clone(), Healthchecks::new(config.ping_retries));
     containers.fetch_containers().await?;
 
+    // create event handler
     let containers = Arc::new(RwLock::new(containers));
-    let mut events = Events::new(docker, containers.clone());
+    let mut events = EventHandler::new(docker, containers.clone());
 
+    // handle docker events in a new task
     spawn(async move {
         events.handle_events().await;
     });
 
+    // periodically refresh docker container list in case we miss some events
     let cont = containers.clone();
     spawn(async move {
         let duration = Duration::from_secs(config.fetch_interval);
@@ -84,6 +97,7 @@ async fn main() -> Result<()> {
         }
     });
 
+    // periodically ping the healthcheck urls of the monitored containers
     let mut interval = interval(Duration::from_secs(config.ping_interval));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
