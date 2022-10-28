@@ -1,16 +1,20 @@
 //! Manage monitored docker containers
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use anyhow::{anyhow, bail, Context, Result};
 use docker_api::{models::ContainerInspect200Response, opts::ContainerListOpts, Docker};
 use futures_util::future::join_all;
+use tokio::sync::RwLock;
 use tracing::{error, info};
 
 use crate::healthchecks::Healthchecks;
 
 /// Docker container health status
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Health {
     /// Healthy indicates that the container is running correctly
     Healthy,
@@ -32,17 +36,23 @@ struct Container {
     health: Option<Health>,
 }
 
+/// Stores monitored and ignored containers
+struct ManagedContainers {
+    /// Mapping from container id to container data for monitored containers
+    monitored_containers: HashMap<String, Container>,
+
+    /// Set of containers without healthchecks label. These containers can be safely ignored,
+    /// as it is not possible to add labels to running containers.
+    ignored_containers: HashSet<String>,
+}
+
 /// Manager for monitored docker containers
 pub struct ContainerManager {
     /// Docker daemon interface
     docker: Docker,
 
-    /// Mapping from container id to container data for monitored containers
-    containers: HashMap<String, Container>,
-
-    /// Set of containers without healthchecks label. These containers can be safely ignored,
-    /// as it is not possible to add labels to running containers.
-    ignored_containers: HashSet<String>,
+    /// RwLocked monitored and ignored containers
+    containers: Arc<RwLock<ManagedContainers>>,
 
     /// Healthchecks.io interface
     healthchecks: Healthchecks,
@@ -53,30 +63,37 @@ impl ContainerManager {
     pub fn new(docker: Docker, healthchecks: Healthchecks) -> Self {
         Self {
             docker,
-            containers: HashMap::new(),
-            ignored_containers: HashSet::new(),
+            containers: Arc::new(RwLock::new(ManagedContainers {
+                monitored_containers: HashMap::new(),
+                ignored_containers: HashSet::new(),
+            })),
             healthchecks,
         }
     }
 
     /// Ping the healthcheck urls of all monitored containers
-    pub async fn ping_healthchecks(&mut self) {
+    pub async fn ping_healthchecks(&self) {
         info!("pinging healthchecks");
-        join_all(self.get_status_map().iter().map(|(label, health)| async {
-            if let Err(err) = self
-                .healthchecks
-                .ping(label, health)
+        join_all(
+            self.get_status_map()
                 .await
-                .context("failed to ping healthchecks")
-            {
-                error!("{err:#}");
-            }
-        }))
+                .iter()
+                .map(|(label, health)| async {
+                    if let Err(err) = self
+                        .healthchecks
+                        .ping(label, health)
+                        .await
+                        .context("failed to ping healthchecks")
+                    {
+                        error!("{err:#}");
+                    }
+                }),
+        )
         .await;
     }
 
     /// Reload all docker containers from the daemon
-    pub async fn fetch_containers(&mut self) -> Result<()> {
+    pub async fn fetch_containers(&self) -> Result<()> {
         info!("fetching containers");
         let mut containers = HashMap::new();
         let mut ignored_containers = HashSet::new();
@@ -100,15 +117,22 @@ impl ContainerManager {
                 ignored_containers.insert(id);
             }
         }
-        self.containers = containers;
-        self.ignored_containers = ignored_containers;
+        let mut cont = self.containers.write().await;
+        cont.monitored_containers = containers;
+        cont.ignored_containers = ignored_containers;
         Ok(())
     }
 
     /// Handle container start events
-    pub async fn container_started(&mut self, id: String) -> Result<()> {
+    pub async fn container_started(&self, id: String) -> Result<()> {
         // ignore containers without healthchecks label
-        if self.ignored_containers.contains(&id) {
+        if self
+            .containers
+            .read()
+            .await
+            .ignored_containers
+            .contains(&id)
+        {
             return Ok(());
         }
 
@@ -116,30 +140,41 @@ impl ContainerManager {
         if let Some(container) = self.fetch_container(&id).await? {
             // add the container to the collection of monitored containers
             let label = container.ping_url.clone();
-            self.containers.insert(id, container);
+            self.containers
+                .write()
+                .await
+                .monitored_containers
+                .insert(id, container);
 
             // send a ping to the corresponding ping url
             self.ping_one(&label).await?;
         } else {
             // ignore the container if it has no healthchecks label
-            self.ignored_containers.insert(id);
+            self.containers.write().await.ignored_containers.insert(id);
         }
 
         Ok(())
     }
 
     /// Handle container die events
-    pub async fn container_died(&mut self, id: &String) -> Result<()> {
+    pub async fn container_died(&self, id: &String) -> Result<()> {
         // ignore containers without healthchecks label and remove them from the set of ignored containers
-        if self.ignored_containers.remove(id) {
+        if self.containers.write().await.ignored_containers.remove(id) {
             return Ok(());
         }
 
         // remove the container from the collection of monitored containers
-        if let Some(container) = self.containers.remove(id) {
+        let mut containers = self.containers.write().await;
+        if let Some(container) = containers.monitored_containers.remove(id) {
+            drop(containers);
+
             // send an unhealthy ping to the corresponding ping url,
             // if this was the last container with this ping url
-            if !self.get_status_map().contains_key(&container.ping_url) {
+            if !self
+                .get_status_map()
+                .await
+                .contains_key(&container.ping_url)
+            {
                 self.healthchecks
                     .ping(&container.ping_url, &Health::Unhealthy)
                     .await?;
@@ -149,28 +184,36 @@ impl ContainerManager {
     }
 
     /// Handle container health update events
-    pub async fn container_health_update(&mut self, id: String, health: Health) -> Result<()> {
+    pub async fn container_health_update(&self, id: String, health: Health) -> Result<()> {
         // ignore containers without healthchecks label
-        if self.ignored_containers.contains(&id) {
+        if self
+            .containers
+            .read()
+            .await
+            .ignored_containers
+            .contains(&id)
+        {
             return Ok(());
         }
 
         // try to find the container in the collection of monitored containers,
         // otherwise fetch its data from the docker daemon
-        let label = if let Some(container) = self.containers.get_mut(&id) {
+        let mut containers = self.containers.write().await;
+        let label = if let Some(container) = containers.monitored_containers.get_mut(&id) {
             // update the health status
             container.health = Some(health);
             container.ping_url.clone()
         } else if let Some(container) = self.fetch_container(&id).await? {
             // add the container to the collection of monitored containers
             let label = container.ping_url.clone();
-            self.containers.insert(id, container);
+            containers.monitored_containers.insert(id, container);
             label
         } else {
             // ignore the container if it has no healthchecks label
-            self.ignored_containers.insert(id);
+            containers.ignored_containers.insert(id);
             return Ok(());
         };
+        drop(containers);
 
         // send a ping to the corresponding ping url
         self.ping_one(&label).await
@@ -179,10 +222,10 @@ impl ContainerManager {
     /// Return a mapping from ping urls to their current health status
     /// If there are multiple containers with the same ping url,
     /// the 'worst' health status is used.
-    fn get_status_map(&self) -> HashMap<String, Health> {
+    async fn get_status_map(&self) -> HashMap<String, Health> {
         let mut status = HashMap::new();
-        for container in self.containers.values() {
-            let health: Health = container.health.clone().unwrap_or(Health::Healthy);
+        for container in self.containers.read().await.monitored_containers.values() {
+            let health: Health = container.health.unwrap_or(Health::Healthy);
             if let Some(h) = status.get_mut(&container.ping_url) {
                 // another container with the same ping url already exists
                 // update the health status if the health status of the current containers is 'worse'
@@ -198,9 +241,10 @@ impl ContainerManager {
     }
 
     /// Ping one url
-    async fn ping_one(&mut self, ping_url: &String) -> Result<()> {
+    async fn ping_one(&self, ping_url: &String) -> Result<()> {
         let health = self
             .get_status_map()
+            .await
             .remove(ping_url)
             .unwrap_or(Health::Unhealthy);
         self.healthchecks.ping(ping_url, &health).await
@@ -208,7 +252,7 @@ impl ContainerManager {
 
     /// Fetch information about a container from the docker daemon.
     /// Returns `None` if the container has no `healthchecks.url` label.
-    async fn fetch_container(&mut self, id: &str) -> Result<Option<Container>> {
+    async fn fetch_container(&self, id: &str) -> Result<Option<Container>> {
         let data = self
             .docker
             .containers()

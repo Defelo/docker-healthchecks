@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::{anyhow, bail, Context, Result};
 use docker_api::{models::EventMessage, opts::EventsOpts, Docker};
 use futures_util::StreamExt;
-use tokio::{spawn, sync::RwLock, time::timeout};
+use tokio::{spawn, time::timeout};
 use tracing::{error, info};
 
 use crate::container_manager::{ContainerManager, Health};
@@ -13,12 +13,12 @@ use crate::container_manager::{ContainerManager, Health};
 /// Handler for docker daemon events
 pub struct EventHandler {
     /// Reference to the container manager to which container updates are to be reported
-    container_manager: Arc<RwLock<ContainerManager>>,
+    container_manager: Arc<ContainerManager>,
 }
 
 impl EventHandler {
     /// Create a new docker event handler
-    pub fn new(container_manager: Arc<RwLock<ContainerManager>>) -> Self {
+    pub fn new(container_manager: Arc<ContainerManager>) -> Self {
         Self { container_manager }
     }
 
@@ -85,11 +85,7 @@ impl EventHandler {
     async fn handle_container_start(&self, event: EventMessage) -> Result<()> {
         let id = get_container_id(&event)?.clone();
         info!("container started: {:?}", id);
-        self.container_manager
-            .write()
-            .await
-            .container_started(id)
-            .await?;
+        self.container_manager.container_started(id).await?;
         Ok(())
     }
 
@@ -97,11 +93,7 @@ impl EventHandler {
     async fn handle_container_die(&self, event: EventMessage) -> Result<()> {
         let id = get_container_id(&event)?;
         info!("container died: {:?}", id);
-        self.container_manager
-            .write()
-            .await
-            .container_died(id)
-            .await?;
+        self.container_manager.container_died(id).await?;
         Ok(())
     }
 
@@ -123,8 +115,6 @@ impl EventHandler {
 
         info!("health status update: {} {:?}", id, status);
         self.container_manager
-            .write()
-            .await
             .container_health_update(id, status)
             .await?;
         Ok(())

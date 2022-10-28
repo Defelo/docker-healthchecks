@@ -25,7 +25,6 @@ use anyhow::{ensure, Context, Result};
 use docker_api::Docker;
 use tokio::{
     spawn,
-    sync::RwLock,
     time::{interval, sleep, timeout},
 };
 use tracing::{debug, error};
@@ -66,12 +65,11 @@ async fn main() -> Result<()> {
     );
 
     // create container manager and load container list from docker daemon
-    let mut containers =
-        ContainerManager::new(docker.clone(), Healthchecks::new(config.ping_retries));
+    let containers = ContainerManager::new(docker.clone(), Healthchecks::new(config.ping_retries));
     containers.fetch_containers().await?;
 
     // create event handler
-    let containers = Arc::new(RwLock::new(containers));
+    let containers = Arc::new(containers);
     let events = EventHandler::new(containers.clone());
 
     // handle docker events in a new task
@@ -88,9 +86,7 @@ async fn main() -> Result<()> {
         loop {
             sleep(duration).await;
             if let Err(err) = timeout(Duration::from_secs(config.fetch_timeout), async {
-                cont.write()
-                    .await
-                    .fetch_containers()
+                cont.fetch_containers()
                     .await
                     .context("failed to fetch containers")
             })
@@ -108,9 +104,10 @@ async fn main() -> Result<()> {
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         interval.tick().await;
-        if let Err(err) = timeout(Duration::from_secs(config.ping_timeout), async {
-            containers.write().await.ping_healthchecks().await;
-        })
+        if let Err(err) = timeout(
+            Duration::from_secs(config.ping_timeout),
+            containers.ping_healthchecks(),
+        )
         .await
         .context("failed to ping healthchecks in time")
         {
