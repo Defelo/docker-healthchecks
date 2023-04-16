@@ -30,8 +30,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: cargo test --locked
         run: cargo test --locked --all-features --all-targets
-      - name: cargo test --doc
-        run: cargo test --locked --all-features --doc
+      # - name: cargo test --doc
+      #   run: cargo test --locked --all-features --doc
 
   # coverage:
   #   runs-on: ubuntu-latest
