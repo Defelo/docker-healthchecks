@@ -1,0 +1,9 @@
+version: '3.10'
+
+services:
+  docker-healthchecks:
+    image: ghcr.io/defelo/docker-healthchecks
+    build: .
+    restart: always
+    init: true
+    env_file: docker-healthchecks.env
