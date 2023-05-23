@@ -1,7 +1,9 @@
-[![CI](https://github.com/Defelo/docker-healthchecks/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Defelo/docker-healthchecks/actions/workflows/ci.yml)
-[![Unsafe Rust forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg?style=flat)](https://github.com/rust-secure-code/safety-dance/)
-[![Version](https://img.shields.io/github/v/tag/Defelo/docker-healthchecks?label=version)](https://ghcr.io/Defelo/docker-healthchecks)
-[![rustc 1.60.0+](https://img.shields.io/badge/rustc-1.62.0+-ab6000.svg?style=flat)](https://blog.rust-lang.org/2022/04/07/Rust-1.60.0.html)
+[![check](https://github.com/Defelo/docker-healthchecks/actions/workflows/check.yml/badge.svg)](https://github.com/Defelo/docker-healthchecks/actions/workflows/check.yml)
+[![test](https://github.com/Defelo/docker-healthchecks/actions/workflows/test.yml/badge.svg)](https://github.com/Defelo/docker-healthchecks/actions/workflows/test.yml)
+[![docker](https://github.com/Defelo/docker-healthchecks/actions/workflows/docker.yml/badge.svg)](https://github.com/Defelo/docker-healthchecks/actions/workflows/docker.yml) <!--
+https://app.codecov.io/gh/Defelo/docker-healthchecks/settings/badge
+[![codecov](https://codecov.io/gh/Defelo/docker-healthchecks/branch/develop/graph/badge.svg?token=changeme)](https://codecov.io/gh/Defelo/docker-healthchecks) -->
+![Version](https://img.shields.io/github/v/tag/Defelo/docker-healthchecks?include_prereleases&label=version)
 [![dependency status](https://deps.rs/repo/github/Defelo/docker-healthchecks/status.svg)](https://deps.rs/repo/github/Defelo/docker-healthchecks)
 
 # docker-healthchecks
