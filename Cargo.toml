@@ -1,7 +1,7 @@
 [package]
 name = "docker-healthchecks"
 description = "Healthchecks.io Integration for Docker Healthchecks"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 rust-version = "1.60.0"
 license = "MIT"
