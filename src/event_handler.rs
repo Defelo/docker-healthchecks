@@ -12,7 +12,8 @@ use crate::container_manager::{ContainerManager, Health};
 
 /// Handler for docker daemon events
 pub struct EventHandler {
-    /// Reference to the container manager to which container updates are to be reported
+    /// Reference to the container manager to which container updates are to be
+    /// reported
     container_manager: Arc<ContainerManager>,
 }
 

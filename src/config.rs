@@ -19,13 +19,15 @@ pub struct Config {
     /// Number of seconds after which the ping timeout expires
     pub ping_timeout: u64,
 
-    /// Number of seconds between reloading the full container list from the docker daemon
+    /// Number of seconds between reloading the full container list from the
+    /// docker daemon
     pub fetch_interval: u64,
 
     /// Number of seconds after which the container fetch timeout expires
     pub fetch_timeout: u64,
 
-    /// Number of seconds after which the timeout for handling a docker event expires
+    /// Number of seconds after which the timeout for handling a docker event
+    /// expires
     pub event_timeout: u64,
 }
 

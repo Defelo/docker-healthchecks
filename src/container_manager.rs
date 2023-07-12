@@ -32,7 +32,8 @@ struct Container {
     /// healthchecks url of the container
     ping_url: String,
 
-    /// health status of the container (`None` if the container has no healthcheck)
+    /// health status of the container (`None` if the container has no
+    /// healthcheck)
     health: Option<Health>,
 }
 
@@ -41,8 +42,9 @@ struct ManagedContainers {
     /// Mapping from container id to container data for monitored containers
     monitored_containers: HashMap<String, Container>,
 
-    /// Set of containers without healthchecks label. These containers can be safely ignored,
-    /// as it is not possible to add labels to running containers.
+    /// Set of containers without healthchecks label. These containers can be
+    /// safely ignored, as it is not possible to add labels to running
+    /// containers.
     ignored_containers: HashSet<String>,
 }
 
@@ -158,7 +160,8 @@ impl ContainerManager {
 
     /// Handle container die events
     pub async fn container_died(&self, id: &String) -> Result<()> {
-        // ignore containers without healthchecks label and remove them from the set of ignored containers
+        // ignore containers without healthchecks label and remove them from the set of
+        // ignored containers
         if self.containers.write().await.ignored_containers.remove(id) {
             return Ok(());
         }
@@ -228,7 +231,8 @@ impl ContainerManager {
             let health: Health = container.health.unwrap_or(Health::Healthy);
             if let Some(h) = status.get_mut(&container.ping_url) {
                 // another container with the same ping url already exists
-                // update the health status if the health status of the current containers is 'worse'
+                // update the health status if the health status of the current containers is
+                // 'worse'
                 if health > *h {
                     *h = health;
                 }
