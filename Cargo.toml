@@ -3,7 +3,7 @@ name = "docker-healthchecks"
 description = "Healthchecks.io Integration for Docker Healthchecks"
 version = "0.2.10"
 edition = "2021"
-rust-version = "1.60.0"
+rust-version = "1.63.0"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/Defelo/docker-healthchecks"
@@ -16,7 +16,7 @@ config = { version = "0.13.3", default-features = false }
 docker-api = { version = "0.14", default-features = false }
 futures-util = { version = "0.3.28", default-features = false }
 reqwest = { version = "0.11.20", default-features = false, features = ["rustls-tls"] }
-serde = { version = "1.0.185", default-features = false, features = ["derive"] }
+serde = { version = "1.0.186", default-features = false, features = ["derive"] }
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 tracing = { version = "0.1.37", default-features = false }
 tracing-subscriber = { version = "0.3.17", default-features = false, features = ["fmt", "ansi", "env-filter"] }
