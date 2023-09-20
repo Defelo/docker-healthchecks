@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "docker-healthchecks"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "anyhow",
  "config",
